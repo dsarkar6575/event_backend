@@ -1,6 +1,9 @@
 // controllers/postController.js
 const Post = require('../models/Post');
 const User = require('../models/User');
+const cloudinary = require('../utils/cloudinary');
+const fs = require('fs');
+const path = require('path');
 
 // ------------------------
 // CREATE POST
@@ -8,30 +11,46 @@ const User = require('../models/User');
 // Private
 // ------------------------
 exports.createPost = async (req, res) => {
-    const { title, description, mediaUrls, isEvent, eventDateTime, location } = req.body;
+  const { title, description, isEvent, eventDateTime, location } = req.body;
 
-    if (!title || !description) {
-        return res.status(400).json({ msg: 'Title and description are required.' });
-    }
+  if (!title || !description) {
+    return res.status(400).json({ msg: 'Title and description are required.' });
+  }
 
-    try {
-        const newPost = new Post({
-            author: req.user.id,
-            title,
-            description,
-            mediaUrls: mediaUrls || [],
-            isEvent: !!isEvent,
-            eventDateTime: isEvent ? eventDateTime : null,
-            location: isEvent ? location : null
+  try {
+    let imageUrls = [];
+
+    // Check if files exist and are an array
+    if (req.files && Array.isArray(req.files)) {
+      const imageUploadPromises = req.files.map(async (file) => {
+        const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+        const result = await cloudinary.uploader.upload(base64, {
+          folder: 'event_social_posts',
         });
+        return result.secure_url;
+      });
 
-        const post = await newPost.save();
-        await post.populate('author', 'username profileImageUrl');
-        res.status(201).json(post.toObject({ getters: true }));
-    } catch (err) {
-        console.error('❌ Error creating post:', err.message);
-        res.status(500).json({ msg: 'Server Error' });
+      imageUrls = await Promise.all(imageUploadPromises);
     }
+
+    const newPost = new Post({
+      author: req.user.id,
+      title,
+      description,
+      mediaUrls: imageUrls,
+      isEvent: isEvent === 'true' || isEvent === true,
+      eventDateTime: isEvent ? eventDateTime : null,
+      location: isEvent ? location : null,
+    });
+
+    const post = await newPost.save();
+    await post.populate('author', 'username profileImageUrl');
+
+    res.status(201).json(post.toObject({ getters: true }));
+  } catch (err) {
+    console.error('❌ Error creating post:', err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
 };
 
 // ------------------------

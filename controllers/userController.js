@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Post = require('../models/Post');
 const mongoose = require('mongoose');
+const cloudinary = require('../utils/cloudinary'); // Make sure this exists
 
 // Helper to validate MongoDB ObjectId
 const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
@@ -30,34 +31,39 @@ exports.getUserProfile = async (req, res) => {
 // @desc    Update user profile (only current user can update their own)
 // @route   PUT /api/users/:userId
 // @access  Private
+// Update user profile with single image
 exports.updateUserProfile = async (req, res) => {
-    const { userId } = req.params;
-    const { username, bio, profileImageUrl } = req.body;
+  const { userId } = req.params;
+  const { username, bio } = req.body;
+  const currentUserId = req.user.id;
 
-    if (req.user.id !== userId) {
-        return res.status(403).json({ msg: 'Unauthorized: You can only update your own profile.' });
+  if (currentUserId !== userId) {
+    return res.status(403).json({ msg: 'Unauthorized' });
+  }
+
+  try {
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ msg: 'User not found' });
+
+    if (username) user.username = username;
+    if (bio) user.bio = bio;
+
+    if (req.file) {
+      const base64 = `data:${req.file.mimetype};base64,${req.file.buffer.toString('base64')}`;
+      const result = await cloudinary.uploader.upload(base64, {
+        folder: 'event_social_profiles',
+      });
+      user.profileImageUrl = result.secure_url;
     }
 
-    try {
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ msg: 'User not found' });
-        }
-
-        if (username) user.username = username;
-        if (bio) user.bio = bio;
-        if (profileImageUrl) user.profileImageUrl = profileImageUrl;
-
-        await user.save();
-        res.status(200).json({ success: true, msg: 'Profile updated', user: user.toObject() });
-    } catch (err) {
-        console.error('❌ Error in updateUserProfile:', err.message);
-        if (err.code === 11000) {
-            return res.status(400).json({ msg: 'Username already taken.' });
-        }
-        res.status(500).json({ msg: 'Server Error' });
-    }
+    await user.save();
+    res.status(200).json({ success: true, user });
+  } catch (err) {
+    console.error('❌ Error updating profile:', err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
 };
+
 
 // @desc    Get all posts by a specific user
 // @route   GET /api/users/:userId/posts

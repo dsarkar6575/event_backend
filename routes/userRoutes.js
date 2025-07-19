@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const userController = require('../controllers/userController');
 const { protect } = require('../middleware/authMiddleware');
+const upload = require('../middleware/multer.js'); 
 
 // @route   GET api/users/:userId
 // @desc    Get user profile by ID
@@ -12,7 +13,7 @@ router.get('/:userId', userController.getUserProfile);
 // @route   PUT api/users/:userId
 // @desc    Update user profile
 // @access  Private
-router.put('/:userId', protect, userController.updateUserProfile);
+router.put('/:userId', protect, upload.single('profileImageUrl'), userController.updateUserProfile);
 
 // @route   GET api/users/:userId/posts
 // @desc    Get all posts by a specific user

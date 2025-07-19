@@ -3,11 +3,12 @@ const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/postController');
 const { protect } = require('../middleware/authMiddleware');
+const upload = require('../middleware/multer.js'); 
 
 // @route   POST api/posts
 // @desc    Create a new post
 // @access  Private
-router.post('/', protect, postController.createPost);
+router.post('/', protect, upload.array('mediaUrls', 5),postController.createPost);
 
 // @route   GET api/posts
 // @desc    Get all posts (feed)

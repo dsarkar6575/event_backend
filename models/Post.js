@@ -20,7 +20,7 @@ const PostSchema = new mongoose.Schema({
         maxlength: 1000
     },
     mediaUrls: [{
-        type: String, // Firebase, Cloudinary, etc.
+        type: String, 
         trim: true
     }],
     interestedCount: {
