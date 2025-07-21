@@ -46,12 +46,15 @@ exports.createPost = async (req, res) => {
     const post = await newPost.save();
     await post.populate('author', 'username profileImageUrl');
 
-    res.status(201).json(post.toObject({ getters: true }));
+    // Fix: Wrap the post object in a 'post' key
+    res.status(201).json({ post: post.toObject({ getters: true }) });
+
   } catch (err) {
     console.error('❌ Error creating post:', err);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
+
 
 // ------------------------
 // GET ALL POSTS
