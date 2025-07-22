@@ -12,6 +12,7 @@ const userRoutes = require('./routes/userRoutes');
 const postRoutes = require('./routes/postRoutes');
 const chatRoutes = require('./routes/chatRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
+const commentRoutes = require('./routes/commentRoutes.js'); // Assuming you have a comments controller
 const { verifyToken } = require('./middleware/authMiddleware'); // Import for Socket.IO auth
 
 const app = express();
@@ -100,6 +101,9 @@ app.use('/api/users', userRoutes);
 app.use('/api/posts', postRoutes);
 app.use('/api/chat', chatRoutes); // Consider how chat routes and Socket.IO interact
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/posts', commentRoutes);
+// Assuming you have a comments controller
+
 
 // Basic error handling middleware (add more robust error handling)
 app.use((err, req, res, next) => {
