@@ -35,9 +35,13 @@ exports.getUserProfile = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   const { userId } = req.params;
   const { username, bio } = req.body;
-  const currentUserId = req.user.id;
 
-  if (currentUserId !== userId) {
+  console.log('🔍 User ID param:', userId);
+  console.log('🧪 Authenticated user:', req.user);
+  console.log('📦 Received fields:', req.body);
+  console.log('📷 File received:', req.file);
+
+  if (!req.user || req.user.id !== userId) {
     return res.status(403).json({ msg: 'Unauthorized' });
   }
 
@@ -63,6 +67,7 @@ exports.updateUserProfile = async (req, res) => {
     res.status(500).json({ msg: 'Server Error' });
   }
 };
+
 
 
 // @desc    Get all posts by a specific user

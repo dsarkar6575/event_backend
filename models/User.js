@@ -19,10 +19,10 @@ const UserSchema = new mongoose.Schema({
         required: true,
         minlength: 6
     },
-    profileImageUrl: [{
+    profileImageUrl: {
         type: String,
         default: null
-    }],
+    },
     bio: {
         type: String,
         default: '',
