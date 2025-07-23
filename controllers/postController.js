@@ -14,7 +14,7 @@ exports.createPost = async (req, res) => {
   const { title, description, isEvent, eventDateTime, location } = req.body;
 
   if (!title || !description) {
-    return res.status(400).json({ msg: 'Title and description are required.' });
+    return res.status(400).json({ msg: 'Ti  tle and description are required.' });
   }
 
   try {

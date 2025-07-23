@@ -18,7 +18,13 @@ exports.protect = (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     console.log('🔐 Decoded token:', decoded);
 
-    req.user = { _id: decoded.user?.id || decoded.id }; // ✅ Safe fallback
+    // Normalize user object: ensure req.user.id is always available
+    const userId = decoded.user?.id || decoded._id || decoded.id;
+    if (!userId) {
+      return res.status(401).json({ msg: 'Invalid token payload' });
+    }
+
+    req.user = { id: userId }; // ✅ This fixes the issue
 
     next();
   } catch (err) {
