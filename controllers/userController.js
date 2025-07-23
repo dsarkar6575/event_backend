@@ -35,7 +35,11 @@ exports.getUserProfile = async (req, res) => {
 exports.updateUserProfile = async (req, res) => {
   const { userId } = req.params;
   const { username, bio } = req.body;
-  const currentUserId = req.user.id;
+  const currentUserId = req.user.id || req.user._id;
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    return res.status(400).json({ msg: 'Invalid user ID format' });
+  }
 
   if (currentUserId !== userId) {
     return res.status(403).json({ msg: 'Unauthorized' });
@@ -57,10 +61,12 @@ exports.updateUserProfile = async (req, res) => {
     }
 
     await user.save();
-    res.status(200).json({ success: true, user });
+
+    const { password, ...userData } = user.toObject(); // Exclude sensitive info
+    res.status(200).json({ success: true, user: userData });
   } catch (err) {
-    console.error('❌ Error updating profile:', err);
-    res.status(500).json({ msg: 'Server Error' });
+    console.error('❌ Error updating profile:', err.stack || err);
+    res.status(500).json({ msg: 'Server Error', error: err.message });
   }
 };
 

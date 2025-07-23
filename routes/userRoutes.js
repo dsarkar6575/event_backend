@@ -13,7 +13,7 @@ router.get('/:userId', userController.getUserProfile);
 // @route   PUT api/users/:userId
 // @desc    Update user profile
 // @access  Private
-router.put('/:userId', protect, upload.single('profileImage'), userController.updateUserProfile);
+router.put('/:userId', protect, upload.single('profileImageUrl'), userController.updateUserProfile);
 
 // @route   GET api/users/:userId/posts
 // @desc    Get all posts by a specific user
