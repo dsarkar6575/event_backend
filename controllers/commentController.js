@@ -24,26 +24,24 @@ exports.createComment = async (req, res) => {
       return res.status(400).json({ error: 'Content is required' });
     }
 
-    if (!req.user || !req.user._id) {
+    if (!req.user || !req.user.id) {
       return res.status(401).json({ error: 'Unauthorized: User info missing from token' });
     }
 
     const comment = new Comment({
       content,
       post: req.params.postId,
-      author: req.user._id,
+      author: req.user.id,
     });
 
     await comment.save();
-
-    // Optionally increment comment count in the associated post
     await Post.findByIdAndUpdate(req.params.postId, { $inc: { commentCount: 1 } });
 
     const populated = await comment.populate('author', 'username profileImageUrl');
-
     res.status(201).json(populated);
   } catch (error) {
     console.error('❌ Create comment error:', error);
     res.status(500).json({ error: 'Failed to post comment' });
   }
 };
+
