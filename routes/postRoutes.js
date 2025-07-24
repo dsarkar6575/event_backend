@@ -13,7 +13,7 @@ router.post('/', protect, upload.array('mediaUrls', 5),postController.createPost
 // @route   GET api/posts
 // @desc    Get all posts (feed)
 // @access  Public
-router.get('/', postController.getAllPosts);
+router.get('/', protect, postController.getAllPosts);
 
 // @route   GET api/posts/:postId
 // @desc    Get a single post by ID
@@ -23,7 +23,7 @@ router.get('/:postId', postController.getPostById);
 // @route   PUT api/posts/:postId
 // @desc    Update a post
 // @access  Private
-router.put('/:postId', protect, postController.updatePost);
+router.put('/:postId', protect, upload.array('mediaUrls', 5), postController.updatePost);
 
 // @route   DELETE api/posts/:postId
 // @desc    Delete a post
