@@ -104,7 +104,7 @@ exports.getPostById = async (req, res) => {
 // Private
 // ------------------------
 exports.updatePost = async (req, res) => {
-    const { title, description, mediaUrls, isEvent, eventDateTime, location } = req.body;
+    const { title, description, isEvent, eventDateTime, location } = req.body;
 
     try {
         let post = await Post.findById(req.params.postId);
@@ -117,9 +117,23 @@ exports.updatePost = async (req, res) => {
             return res.status(403).json({ msg: 'Unauthorized: You are not the author.' });
         }
 
+        // Handle file uploads if new files are provided
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+            const imageUploadPromises = req.files.map(async (file) => {
+                const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+                const result = await cloudinary.uploader.upload(base64, {
+                    folder: 'event_social_posts',
+                });
+                return result.secure_url;
+            });
+
+            // Replace existing media with new uploads
+            post.mediaUrls = await Promise.all(imageUploadPromises);
+        }
+
+        // Update other fields
         if (title !== undefined) post.title = title;
         if (description !== undefined) post.description = description;
-        if (mediaUrls !== undefined) post.mediaUrls = mediaUrls;
         if (isEvent !== undefined) post.isEvent = isEvent;
         if (eventDateTime !== undefined) post.eventDateTime = eventDateTime;
         if (location !== undefined) post.location = location;
@@ -127,12 +141,9 @@ exports.updatePost = async (req, res) => {
         await post.save();
         await post.populate('author', 'username profileImageUrl');
 
-        res.status(200).json(post.toObject({ getters: true }));
+        res.status(200).json({ post: post.toObject({ getters: true }) });
     } catch (err) {
         console.error('❌ Error updating post:', err.message);
-        if (err.kind === 'ObjectId') {
-            return res.status(400).json({ msg: 'Invalid Post ID' });
-        }
         res.status(500).json({ msg: 'Server Error' });
     }
 };
