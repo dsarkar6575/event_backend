@@ -104,7 +104,7 @@ exports.getPostById = async (req, res) => {
 // Private
 // ------------------------
 exports.updatePost = async (req, res) => {
-    const { title, description, isEvent, eventDateTime, location } = req.body;
+    const { title, description, isEvent, eventDateTime, location, clearExistingMedia } = req.body; // Destructure clearExistingMedia
 
     try {
         let post = await Post.findById(req.params.postId);
@@ -117,7 +117,12 @@ exports.updatePost = async (req, res) => {
             return res.status(403).json({ msg: 'Unauthorized: You are not the author.' });
         }
 
-        // Handle file uploads if new files are provided
+        // Handle clearing existing media if requested
+        if (clearExistingMedia === 'true') { // 'true' because it comes as a string from multipart form
+            post.mediaUrls = [];
+        }
+
+        // Handle new file uploads if new files are provided
         if (req.files && Array.isArray(req.files) && req.files.length > 0) {
             const imageUploadPromises = req.files.map(async (file) => {
                 const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
@@ -127,7 +132,7 @@ exports.updatePost = async (req, res) => {
                 return result.secure_url;
             });
 
-            // Replace existing media with new uploads
+            // If new files are uploaded, replace existing media (or add if cleared above)
             post.mediaUrls = await Promise.all(imageUploadPromises);
         }
 
@@ -147,7 +152,6 @@ exports.updatePost = async (req, res) => {
         res.status(500).json({ msg: 'Server Error' });
     }
 };
-
 // ------------------------
 // DELETE POST
 // DELETE /api/posts/:postId
