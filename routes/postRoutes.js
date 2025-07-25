@@ -40,5 +40,15 @@ router.put('/:postId/interest', protect, postController.togglePostInterest);
 // @access  Private
 router.get('/my/interested', protect, postController.getInterestedPosts); // Specific route for current user's interested posts, avoid conflict with :postId
 
+// @route   PUT api/posts/:postId/attend
+// @desc    Mark attendance for an event
+// @access  Private
+router.put('/:postId/attend', protect, postController.markAttendance);
+
+// @route   GET api/posts/my/attended
+// @desc    Get all attended events by user
+// @access  Private
+router.get('/my/attended', protect, postController.getAttendedPosts);
+
 
 module.exports = router;

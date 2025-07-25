@@ -1,4 +1,3 @@
-// models/Post.js
 const mongoose = require('mongoose');
 
 const PostSchema = new mongoose.Schema({
@@ -49,9 +48,25 @@ const PostSchema = new mongoose.Schema({
     interestedUsers: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
-    }]
+    }],
+    attendedUsers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    isExpired: {
+        type: Boolean,
+        default: false
+    }
 }, {
-    timestamps: true // Replaces manual createdAt for consistency and includes updatedAt
+    timestamps: true
+});
+
+// Add pre-save hook to check if event is expired
+PostSchema.pre('save', function(next) {
+    if (this.isEvent && this.eventDateTime) {
+        this.isExpired = this.eventDateTime < new Date();
+    }
+    next();
 });
 
 module.exports = mongoose.model('Post', PostSchema);

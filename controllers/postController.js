@@ -235,3 +235,67 @@ exports.getInterestedPosts = async (req, res) => {
         res.status(500).json({ msg: 'Server Error' });
     }
 };
+
+// ------------------------
+// MARK ATTENDANCE
+// PUT /api/posts/:postId/attend
+// Private
+// ------------------------
+exports.markAttendance = async (req, res) => {
+    try {
+        const post = await Post.findById(req.params.postId);
+
+        if (!post) {
+            return res.status(404).json({ msg: 'Post not found' });
+        }
+
+        if (!post.isEvent || !post.isExpired) {
+            return res.status(400).json({ msg: 'Event has not ended yet' });
+        }
+
+        const userId = req.user.id;
+        const wasInterested = post.interestedUsers.includes(userId);
+        const hasAttended = post.attendedUsers.includes(userId);
+
+        if (!wasInterested) {
+            return res.status(400).json({ msg: 'You must be interested in the event to mark attendance' });
+        }
+
+        if (hasAttended) {
+            return res.status(400).json({ msg: 'You have already marked attendance' });
+        }
+
+        post.attendedUsers.push(userId);
+        await post.save();
+        await post.populate('author', 'username profileImageUrl');
+
+        res.status(200).json({
+            msg: 'Attendance marked successfully',
+            post: post.toObject({ getters: true })
+        });
+    } catch (err) {
+        console.error('❌ Error marking attendance:', err.message);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// ------------------------
+// GET ATTENDED POSTS
+// GET /api/posts/attended
+// Private
+// ------------------------
+exports.getAttendedPosts = async (req, res) => {
+    try {
+        const posts = await Post.find({ 
+            attendedUsers: req.user.id,
+            isEvent: true
+        })
+        .sort({ eventDateTime: -1 })
+        .populate('author', 'username profileImageUrl');
+
+        res.status(200).json(posts.map(p => p.toObject({ getters: true })));
+    } catch (err) {
+        console.error('❌ Error fetching attended posts:', err.message);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
