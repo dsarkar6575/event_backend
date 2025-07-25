@@ -1,4 +1,3 @@
-// routes/postRoutes.js
 const express = require('express');
 const router = express.Router();
 const postController = require('../controllers/postController');
@@ -13,7 +12,7 @@ router.post('/', protect, upload.array('mediaUrls', 5),postController.createPost
 // @route   GET api/posts
 // @desc    Get all posts (feed)
 // @access  Public
-router.get('/', protect, postController.getAllPosts);
+router.get('/', postController.getAllPosts); // Made public as per original code, consider if authentication is needed for feed.
 
 // @route   GET api/posts/:postId
 // @desc    Get a single post by ID
@@ -35,10 +34,10 @@ router.delete('/:postId', protect, postController.deletePost);
 // @access  Private
 router.put('/:postId/interest', protect, postController.togglePostInterest);
 
-// @route   GET api/posts/interested
+// @route   GET api/posts/my/interested
 // @desc    Get posts the current user is interested in
 // @access  Private
-router.get('/my/interested', protect, postController.getInterestedPosts); // Specific route for current user's interested posts, avoid conflict with :postId
+router.get('/my/interested', protect, postController.getInterestedPosts); 
 
 // @route   PUT api/posts/:postId/attend
 // @desc    Mark attendance for an event

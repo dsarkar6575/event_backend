@@ -1,9 +1,8 @@
-// controllers/postController.js
 const Post = require('../models/Post');
-const User = require('../models/User');
+const User = require('../models/User'); // Assuming you have a User model
 const cloudinary = require('../utils/cloudinary');
-const fs = require('fs');
-const path = require('path');
+const fs = require('fs'); // Not used in provided code, can be removed if not needed elsewhere
+const path = require('path'); // Not used in provided code, can be removed if not needed elsewhere
 
 // ------------------------
 // CREATE POST
@@ -11,48 +10,58 @@ const path = require('path');
 // Private
 // ------------------------
 exports.createPost = async (req, res) => {
-  const { title, description, isEvent, eventDateTime, location } = req.body;
+    // Added eventEndDateTime to destructuring
+    const { title, description, isEvent, eventDateTime, eventEndDateTime, location } = req.body;
 
-  if (!title || !description) {
-    return res.status(400).json({ msg: 'Ti  tle and description are required.' });
-  }
-
-  try {
-    let imageUrls = [];
-
-    // Check if files exist and are an array
-    if (req.files && Array.isArray(req.files)) {
-      const imageUploadPromises = req.files.map(async (file) => {
-        const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-        const result = await cloudinary.uploader.upload(base64, {
-          folder: 'event_social_posts',
-        });
-        return result.secure_url;
-      });
-
-      imageUrls = await Promise.all(imageUploadPromises);
+    if (!title || !description) {
+        return res.status(400).json({ msg: 'Title and description are required.' });
     }
 
-    const newPost = new Post({
-      author: req.user.id,
-      title,
-      description,
-      mediaUrls: imageUrls,
-      isEvent: isEvent === 'true' || isEvent === true,
-      eventDateTime: isEvent ? eventDateTime : null,
-      location: isEvent ? location : null,
-    });
+    // Validation for events: if isEvent is true, eventDateTime and eventEndDateTime are required
+    if (isEvent === 'true' || isEvent === true) {
+        if (!eventDateTime || !eventEndDateTime) {
+            return res.status(400).json({ msg: 'Event date and time (start and end) are required for events.' });
+        }
+        if (new Date(eventDateTime) >= new Date(eventEndDateTime)) {
+            return res.status(400).json({ msg: 'Event end time must be after start time.' });
+        }
+    }
 
-    const post = await newPost.save();
-    await post.populate('author', 'username profileImageUrl');
+    try {
+        let imageUrls = [];
 
-    // Fix: Wrap the post object in a 'post' key
-    res.status(201).json({ post: post.toObject({ getters: true }) });
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+            const imageUploadPromises = req.files.map(async (file) => {
+                const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+                const result = await cloudinary.uploader.upload(base64, {
+                    folder: 'event_social_posts',
+                });
+                return result.secure_url;
+            });
 
-  } catch (err) {
-    console.error('❌ Error creating post:', err);
-    res.status(500).json({ msg: 'Server Error' });
-  }
+            imageUrls = await Promise.all(imageUploadPromises);
+        }
+
+        const newPost = new Post({
+            author: req.user.id,
+            title,
+            description,
+            mediaUrls: imageUrls,
+            isEvent: isEvent === 'true' || isEvent === true,
+            eventDateTime: (isEvent === 'true' || isEvent === true) ? eventDateTime : null,
+            eventEndDateTime: (isEvent === 'true' || isEvent === true) ? eventEndDateTime : null, // Set eventEndDateTime
+            location: (isEvent === 'true' || isEvent === true) ? location : null,
+        });
+
+        const post = await newPost.save();
+        await post.populate('author', 'username profileImageUrl');
+
+        res.status(201).json({ post: post.toObject({ getters: true }) });
+
+    } catch (err) {
+        console.error('❌ Error creating post:', err);
+        res.status(500).json({ msg: 'Server Error' });
+    }
 };
 
 
@@ -104,7 +113,8 @@ exports.getPostById = async (req, res) => {
 // Private
 // ------------------------
 exports.updatePost = async (req, res) => {
-    const { title, description, isEvent, eventDateTime, location, clearExistingMedia } = req.body; // Destructure clearExistingMedia
+    // Added eventEndDateTime to destructuring
+    const { title, description, isEvent, eventDateTime, eventEndDateTime, location, clearExistingMedia } = req.body;
 
     try {
         let post = await Post.findById(req.params.postId);
@@ -118,7 +128,7 @@ exports.updatePost = async (req, res) => {
         }
 
         // Handle clearing existing media if requested
-        if (clearExistingMedia === 'true') { // 'true' because it comes as a string from multipart form
+        if (clearExistingMedia === 'true') {
             post.mediaUrls = [];
         }
 
@@ -132,16 +142,35 @@ exports.updatePost = async (req, res) => {
                 return result.secure_url;
             });
 
-            // If new files are uploaded, replace existing media (or add if cleared above)
             post.mediaUrls = await Promise.all(imageUploadPromises);
         }
 
         // Update other fields
         if (title !== undefined) post.title = title;
         if (description !== undefined) post.description = description;
-        if (isEvent !== undefined) post.isEvent = isEvent;
-        if (eventDateTime !== undefined) post.eventDateTime = eventDateTime;
-        if (location !== undefined) post.location = location;
+
+        // Update event specific fields only if isEvent is true
+        if (isEvent !== undefined) {
+            post.isEvent = isEvent === 'true' || isEvent === true;
+            if (!post.isEvent) {
+                // If switching from event to non-event, clear event-specific fields
+                post.eventDateTime = null;
+                post.eventEndDateTime = null;
+                post.location = null;
+            }
+        }
+
+        if (post.isEvent) { // Only update if it's an event
+            if (eventDateTime !== undefined) post.eventDateTime = eventDateTime;
+            if (eventEndDateTime !== undefined) post.eventEndDateTime = eventEndDateTime; // Update eventEndDateTime
+            if (location !== undefined) post.location = location;
+
+            // Re-validate event dates if they were updated
+            if (post.eventDateTime && post.eventEndDateTime && new Date(post.eventDateTime) >= new Date(post.eventEndDateTime)) {
+                return res.status(400).json({ msg: 'Event end time must be after start time.' });
+            }
+        }
+
 
         await post.save();
         await post.populate('author', 'username profileImageUrl');
@@ -193,13 +222,34 @@ exports.togglePostInterest = async (req, res) => {
             return res.status(404).json({ msg: 'Post not found' });
         }
 
+        // Only allow interest for event posts
+        if (!post.isEvent) {
+            return res.status(400).json({ msg: 'This action is only for event posts.' });
+        }
+
         const userId = req.user.id;
+        const now = new Date();
+
+        // Check if event has started (not if it's over, but if it has begun)
+        const isEventStarted = post.eventDateTime && now >= post.eventDateTime;
+
+        if (isEventStarted) {
+            // If the event has started, the "Interested" button becomes "Attended"
+            // We'll redirect this to a separate `markAttendance` function or handle the logic here
+            // For now, based on your requirement: "The "Interested" button changes to "Attended" only for users who previously marked themselves as interested."
+            // This implies the action itself changes, but the *route* for interest isn't for attendance.
+            // A dedicated route for attendance is cleaner. So, if event started, this route is effectively disabled for interest.
+            return res.status(400).json({ msg: 'The event has already started. You can now mark attendance.' });
+        }
+
         const isInterested = post.interestedUsers.includes(userId);
 
         if (isInterested) {
+            // Remove interest
             post.interestedUsers = post.interestedUsers.filter(id => id.toString() !== userId);
             post.interestedCount = Math.max(post.interestedCount - 1, 0);
         } else {
+            // Add interest
             post.interestedUsers.push(userId);
             post.interestedCount += 1;
         }
@@ -220,12 +270,16 @@ exports.togglePostInterest = async (req, res) => {
 
 // ------------------------
 // GET INTERESTED POSTS
-// GET /api/posts/interested
+// GET /api/posts/my/interested
 // Private
 // ------------------------
 exports.getInterestedPosts = async (req, res) => {
     try {
-        const posts = await Post.find({ interestedUsers: req.user.id })
+        // Only fetch events, as interest is only for events
+        const posts = await Post.find({
+            interestedUsers: req.user.id,
+            isEvent: true
+        })
             .sort({ eventDateTime: 1, createdAt: -1 })
             .populate('author', 'username profileImageUrl');
 
@@ -249,28 +303,43 @@ exports.markAttendance = async (req, res) => {
             return res.status(404).json({ msg: 'Post not found' });
         }
 
-        if (!post.isEvent || !post.isExpired) {
-            return res.status(400).json({ msg: 'Event has not ended yet' });
+        // Must be an event
+        if (!post.isEvent) {
+            return res.status(400).json({ msg: 'This is not an event post.' });
         }
 
         const userId = req.user.id;
+        const now = new Date();
+
+        // Check if the event has started and not yet ended (or just ended)
+        if (!post.eventDateTime || now < post.eventDateTime) {
+            return res.status(400).json({ msg: 'Cannot mark attendance before the event has started.' });
+        }
+
+        // The key requirement: "Restrict attendance confirmation only to users who previously marked interest."
         const wasInterested = post.interestedUsers.includes(userId);
+        if (!wasInterested) {
+            return res.status(403).json({ msg: 'You must have marked interest to confirm attendance for this event.' });
+        }
+
         const hasAttended = post.attendedUsers.includes(userId);
 
-        if (!wasInterested) {
-            return res.status(400).json({ msg: 'You must be interested in the event to mark attendance' });
-        }
-
         if (hasAttended) {
-            return res.status(400).json({ msg: 'You have already marked attendance' });
+            // If already attended, allow "un-attend"
+            post.attendedUsers = post.attendedUsers.filter(id => id.toString() !== userId);
+            post.attendedCount = Math.max(post.attendedCount - 1, 0);
+        } else {
+            // Mark attendance
+            post.attendedUsers.push(userId);
+            post.attendedCount += 1;
         }
 
-        post.attendedUsers.push(userId);
         await post.save();
         await post.populate('author', 'username profileImageUrl');
 
         res.status(200).json({
-            msg: 'Attendance marked successfully',
+            msg: hasAttended ? 'Attendance removed' : 'Attendance marked successfully',
+            attended: !hasAttended,
             post: post.toObject({ getters: true })
         });
     } catch (err) {
@@ -279,78 +348,6 @@ exports.markAttendance = async (req, res) => {
     }
 };
 
-// ------------------------
-// TOGGLE INTEREST OR ATTENDANCE
-// PUT /api/posts/:postId/interest
-// Private
-// ------------------------
-exports.togglePostInterest = async (req, res) => {
-    try {
-        const post = await Post.findById(req.params.postId);
-
-        if (!post) {
-            return res.status(404).json({ msg: 'Post not found' });
-        }
-
-        if (!post.isEvent) {
-            return res.status(400).json({ msg: 'This is not an event post' });
-        }
-
-        const userId = req.user.id;
-        const now = new Date();
-        const isEventOver = post.eventEndDateTime && post.eventEndDateTime < now;
-        const wasInterested = post.interestedUsers.includes(userId);
-
-        if (isEventOver) {
-            // Event is over - handle attendance
-            if (!wasInterested) {
-                return res.status(400).json({ msg: 'You must have been interested to mark attendance' });
-            }
-
-            const hasAttended = post.attendedUsers.includes(userId);
-            
-            if (hasAttended) {
-                // Remove from attended
-                post.attendedUsers = post.attendedUsers.filter(id => id.toString() !== userId);
-                post.attendedCount = Math.max(post.attendedCount - 1, 0);
-            } else {
-                // Add to attended
-                post.attendedUsers.push(userId);
-                post.attendedCount += 1;
-            }
-
-            await post.save();
-            await post.populate('author', 'username profileImageUrl');
-
-            return res.status(200).json({
-                msg: hasAttended ? 'Attendance removed' : 'Attendance marked',
-                attended: !hasAttended,
-                post: post.toObject({ getters: true })
-            });
-        } else {
-            // Event is ongoing - handle interest
-            if (wasInterested) {
-                post.interestedUsers = post.interestedUsers.filter(id => id.toString() !== userId);
-                post.interestedCount = Math.max(post.interestedCount - 1, 0);
-            } else {
-                post.interestedUsers.push(userId);
-                post.interestedCount += 1;
-            }
-
-            await post.save();
-            await post.populate('author', 'username profileImageUrl');
-
-            return res.status(200).json({
-                msg: wasInterested ? 'Interest removed' : 'Interest added',
-                interested: !wasInterested,
-                post: post.toObject({ getters: true })
-            });
-        }
-    } catch (err) {
-        console.error('❌ Error toggling interest/attendance:', err.message);
-        res.status(500).json({ msg: 'Server Error' });
-    }
-};
 
 // ------------------------
 // GET ATTENDED POSTS
@@ -359,13 +356,14 @@ exports.togglePostInterest = async (req, res) => {
 // ------------------------
 exports.getAttendedPosts = async (req, res) => {
     try {
-        const posts = await Post.find({ 
+        // Only fetch events where the user has attended and the event has ended
+        const posts = await Post.find({
             attendedUsers: req.user.id,
             isEvent: true,
-            eventEndDateTime: { $lt: new Date() }
+            eventEndDateTime: { $lt: new Date() } // Ensure the event has actually ended
         })
-        .sort({ eventDateTime: -1 })
-        .populate('author', 'username profileImageUrl');
+            .sort({ eventDateTime: -1 })
+            .populate('author', 'username profileImageUrl');
 
         res.status(200).json(posts.map(p => p.toObject({ getters: true })));
     } catch (err) {

@@ -41,11 +41,11 @@ const PostSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    eventDateTime: {
+    eventDateTime: { // This will be the start time of the event
         type: Date,
         default: null
     },
-    eventEndDateTime: {
+    eventEndDateTime: { // New: End time of the event
         type: Date,
         default: null
     },
@@ -63,7 +63,15 @@ const PostSchema = new mongoose.Schema({
         ref: 'User'
     }]
 }, {
-    timestamps: true
+    timestamps: true,
+    toJSON: { virtuals: true }, // Ensure virtuals are included when converting to JSON
+    toObject: { virtuals: true } // Ensure virtuals are included when converting to object
+});
+
+// Virtual for isExpired
+PostSchema.virtual('isExpired').get(function() {
+    // An event is expired if it's an event and its eventEndDateTime has passed
+    return this.isEvent && this.eventEndDateTime && new Date() >= this.eventEndDateTime;
 });
 
 // Add index for better query performance
