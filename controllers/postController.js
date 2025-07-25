@@ -280,15 +280,89 @@ exports.markAttendance = async (req, res) => {
 };
 
 // ------------------------
+// TOGGLE INTEREST OR ATTENDANCE
+// PUT /api/posts/:postId/interest
+// Private
+// ------------------------
+exports.togglePostInterest = async (req, res) => {
+    try {
+        const post = await Post.findById(req.params.postId);
+
+        if (!post) {
+            return res.status(404).json({ msg: 'Post not found' });
+        }
+
+        if (!post.isEvent) {
+            return res.status(400).json({ msg: 'This is not an event post' });
+        }
+
+        const userId = req.user.id;
+        const now = new Date();
+        const isEventOver = post.eventEndDateTime && post.eventEndDateTime < now;
+        const wasInterested = post.interestedUsers.includes(userId);
+
+        if (isEventOver) {
+            // Event is over - handle attendance
+            if (!wasInterested) {
+                return res.status(400).json({ msg: 'You must have been interested to mark attendance' });
+            }
+
+            const hasAttended = post.attendedUsers.includes(userId);
+            
+            if (hasAttended) {
+                // Remove from attended
+                post.attendedUsers = post.attendedUsers.filter(id => id.toString() !== userId);
+                post.attendedCount = Math.max(post.attendedCount - 1, 0);
+            } else {
+                // Add to attended
+                post.attendedUsers.push(userId);
+                post.attendedCount += 1;
+            }
+
+            await post.save();
+            await post.populate('author', 'username profileImageUrl');
+
+            return res.status(200).json({
+                msg: hasAttended ? 'Attendance removed' : 'Attendance marked',
+                attended: !hasAttended,
+                post: post.toObject({ getters: true })
+            });
+        } else {
+            // Event is ongoing - handle interest
+            if (wasInterested) {
+                post.interestedUsers = post.interestedUsers.filter(id => id.toString() !== userId);
+                post.interestedCount = Math.max(post.interestedCount - 1, 0);
+            } else {
+                post.interestedUsers.push(userId);
+                post.interestedCount += 1;
+            }
+
+            await post.save();
+            await post.populate('author', 'username profileImageUrl');
+
+            return res.status(200).json({
+                msg: wasInterested ? 'Interest removed' : 'Interest added',
+                interested: !wasInterested,
+                post: post.toObject({ getters: true })
+            });
+        }
+    } catch (err) {
+        console.error('❌ Error toggling interest/attendance:', err.message);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
+
+// ------------------------
 // GET ATTENDED POSTS
-// GET /api/posts/attended
+// GET /api/posts/my/attended
 // Private
 // ------------------------
 exports.getAttendedPosts = async (req, res) => {
     try {
         const posts = await Post.find({ 
             attendedUsers: req.user.id,
-            isEvent: true
+            isEvent: true,
+            eventEndDateTime: { $lt: new Date() }
         })
         .sort({ eventDateTime: -1 })
         .populate('author', 'username profileImageUrl');

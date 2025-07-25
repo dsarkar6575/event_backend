@@ -27,6 +27,11 @@ const PostSchema = new mongoose.Schema({
         default: 0,
         min: 0
     },
+    attendedCount: {
+        type: Number,
+        default: 0,
+        min: 0
+    },
     commentCount: {
         type: Number,
         default: 0,
@@ -37,6 +42,10 @@ const PostSchema = new mongoose.Schema({
         default: false
     },
     eventDateTime: {
+        type: Date,
+        default: null
+    },
+    eventEndDateTime: {
         type: Date,
         default: null
     },
@@ -52,21 +61,12 @@ const PostSchema = new mongoose.Schema({
     attendedUsers: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
-    }],
-    isExpired: {
-        type: Boolean,
-        default: false
-    }
+    }]
 }, {
     timestamps: true
 });
 
-// Add pre-save hook to check if event is expired
-PostSchema.pre('save', function(next) {
-    if (this.isEvent && this.eventDateTime) {
-        this.isExpired = this.eventDateTime < new Date();
-    }
-    next();
-});
+// Add index for better query performance
+PostSchema.index({ isEvent: 1, eventEndDateTime: 1 });
 
 module.exports = mongoose.model('Post', PostSchema);
