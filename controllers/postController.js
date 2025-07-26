@@ -1,8 +1,8 @@
 const Post = require('../models/Post');
 const User = require('../models/User'); // Assuming you have a User model
 const cloudinary = require('../utils/cloudinary');
-const fs = require('fs'); // Not used in provided code, can be removed if not needed elsewhere
-const path = require('path'); // Not used in provided code, can be removed if not needed elsewhere
+// const fs = require('fs'); // Removed: Not used
+// const path = require('path'); // Removed: Not used
 
 // ------------------------
 // CREATE POST
@@ -10,83 +10,86 @@ const path = require('path'); // Not used in provided code, can be removed if no
 // Private
 // ------------------------
 exports.createPost = async (req, res) => {
-  try {
-    const {
-      title,
-      description,
-      isEvent,
-      eventDateTime,
-      eventEndDateTime,
-      location,
-    } = req.body;
+    try {
+        const {
+            title,
+            description,
+            isEvent,
+            eventDateTime,
+            eventEndDateTime,
+            location,
+        } = req.body;
 
-    // Basic validation
-    if (!title || !description) {
-      return res.status(400).json({ msg: 'Title and description are required.' });
-    }
+        // Basic validation
+        if (!title || !description) {
+            return res.status(400).json({ msg: 'Title and description are required.' });
+        }
 
-    // Handle boolean correctly (when isEvent is string from form-data)
-    const isEventBool = isEvent === true || isEvent === 'true';
+        // Handle boolean correctly (when isEvent is string from form-data)
+        const isEventBool = isEvent === true || isEvent === 'true';
 
-    // Event-specific validation
-    if (isEventBool) {
-      if (!eventDateTime || !eventEndDateTime) {
-        return res.status(400).json({
-          msg: 'Event date and time (start and end) are required for events.',
+        // Event-specific validation
+        if (isEventBool) {
+            if (!eventDateTime || !eventEndDateTime) {
+                return res.status(400).json({
+                    msg: 'Event date and time (start and end) are required for events.',
+                });
+            }
+
+            const startDate = new Date(eventDateTime);
+            const endDate = new Date(eventEndDateTime);
+
+            if (isNaN(startDate) || isNaN(endDate)) {
+                return res.status(400).json({ msg: 'Invalid event date/time format.' });
+            }
+
+            if (startDate >= endDate) {
+                return res.status(400).json({ msg: 'Event end time must be after start time.' });
+            }
+        }
+
+        // Handle media upload
+        let imageUrls = [];
+
+        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+            const uploadPromises = req.files.map(async (file) => {
+                const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+                const result = await cloudinary.uploader.upload(base64, {
+                    folder: 'event_social_posts',
+                });
+                return result.secure_url;
+            });
+
+            imageUrls = await Promise.all(uploadPromises);
+        }
+
+        // Create post
+        const newPost = new Post({
+            author: req.user.id,
+            title,
+            description,
+            mediaUrls: imageUrls,
+            isEvent: isEventBool,
+            eventDateTime: isEventBool ? new Date(eventDateTime) : null,
+            eventEndDateTime: isEventBool ? new Date(eventEndDateTime) : null,
+            location: isEventBool ? location : null,
         });
-      }
 
-      const startDate = new Date(eventDateTime);
-      const endDate = new Date(eventEndDateTime);
+        const post = await newPost.save();
+        // Populate author, interestedUsers, and attendedUsers for the response
+        await post.populate('author', 'username profileImageUrl');
+        // If you want to return the populated lists on creation, add these:
+        // await post.populate('interestedUsers', 'username profileImageUrl');
+        // await post.populate('attendedUsers', 'username profileImageUrl');
 
-      if (isNaN(startDate) || isNaN(endDate)) {
-        return res.status(400).json({ msg: 'Invalid event date/time format.' });
-      }
 
-      if (startDate >= endDate) {
-        return res.status(400).json({ msg: 'Event end time must be after start time.' });
-      }
+        res.status(201).json({ post: post.toObject({ getters: true }) });
+
+    } catch (err) {
+        console.error('❌ Error creating post:', err);
+        res.status(500).json({ msg: 'Server Error' });
     }
-
-    // Handle media upload
-    let imageUrls = [];
-
-    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-      const uploadPromises = req.files.map(async (file) => {
-        const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-        const result = await cloudinary.uploader.upload(base64, {
-          folder: 'event_social_posts',
-        });
-        return result.secure_url;
-      });
-
-      imageUrls = await Promise.all(uploadPromises);
-    }
-
-    // Create post
-    const newPost = new Post({
-      author: req.user.id,
-      title,
-      description,
-      mediaUrls: imageUrls,
-      isEvent: isEventBool,
-      eventDateTime: isEventBool ? new Date(eventDateTime) : null,
-      eventEndDateTime: isEventBool ? new Date(eventEndDateTime) : null,
-      location: isEventBool ? location : null,
-    });
-
-    const post = await newPost.save();
-    await post.populate('author', 'username profileImageUrl');
-
-    res.status(201).json({ post: post.toObject({ getters: true }) });
-
-  } catch (err) {
-    console.error('❌ Error creating post:', err);
-    res.status(500).json({ msg: 'Server Error' });
-  }
 };
-
-
 
 // ------------------------
 // GET ALL POSTS
@@ -98,6 +101,10 @@ exports.getAllPosts = async (req, res) => {
         const posts = await Post.find()
             .sort({ createdAt: -1 })
             .populate('author', 'username profileImageUrl');
+            // OPTIONAL: If your feed needs to show a summary of interested/attended users for each post,
+            // you can uncomment these lines. Be mindful of potential performance impact for large datasets.
+            // .populate('interestedUsers', 'username profileImageUrl')
+            // .populate('attendedUsers', 'username profileImageUrl');
 
         res.status(200).json(posts.map(p => p.toObject({ getters: true })));
     } catch (err) {
@@ -114,7 +121,10 @@ exports.getAllPosts = async (req, res) => {
 exports.getPostById = async (req, res) => {
     try {
         const post = await Post.findById(req.params.postId)
-            .populate('author', 'username profileImageUrl');
+            .populate('author', 'username profileImageUrl')
+            // Crucial for displaying lists of interested/attended users on a single post page
+            .populate('interestedUsers', 'username profileImageUrl')
+            .populate('attendedUsers', 'username profileImageUrl');
 
         if (!post) {
             return res.status(404).json({ msg: 'Post not found' });
@@ -194,9 +204,11 @@ exports.updatePost = async (req, res) => {
             }
         }
 
-
         await post.save();
+        // Populate for the response after saving
         await post.populate('author', 'username profileImageUrl');
+        await post.populate('interestedUsers', 'username profileImageUrl');
+        await post.populate('attendedUsers', 'username profileImageUrl');
 
         res.status(200).json({ post: post.toObject({ getters: true }) });
     } catch (err) {
@@ -257,11 +269,6 @@ exports.togglePostInterest = async (req, res) => {
         const isEventStarted = post.eventDateTime && now >= post.eventDateTime;
 
         if (isEventStarted) {
-            // If the event has started, the "Interested" button becomes "Attended"
-            // We'll redirect this to a separate `markAttendance` function or handle the logic here
-            // For now, based on your requirement: "The "Interested" button changes to "Attended" only for users who previously marked themselves as interested."
-            // This implies the action itself changes, but the *route* for interest isn't for attendance.
-            // A dedicated route for attendance is cleaner. So, if event started, this route is effectively disabled for interest.
             return res.status(400).json({ msg: 'The event has already started. You can now mark attendance.' });
         }
 
@@ -278,7 +285,10 @@ exports.togglePostInterest = async (req, res) => {
         }
 
         await post.save();
+        // Populate all relevant fields for the response
         await post.populate('author', 'username profileImageUrl');
+        await post.populate('interestedUsers', 'username profileImageUrl');
+        await post.populate('attendedUsers', 'username profileImageUrl'); // Still populate, even if empty for interest
 
         res.status(200).json({
             msg: isInterested ? 'Interest removed' : 'Interest added',
@@ -304,7 +314,10 @@ exports.getInterestedPosts = async (req, res) => {
             isEvent: true
         })
             .sort({ eventDateTime: 1, createdAt: -1 })
-            .populate('author', 'username profileImageUrl');
+            .populate('author', 'username profileImageUrl')
+            // If you want to see other interested users for these posts in the list:
+            .populate('interestedUsers', 'username profileImageUrl'); // Add this line
+            // .populate('attendedUsers', 'username profileImageUrl'); // Also an option
 
         res.status(200).json(posts.map(p => p.toObject({ getters: true })));
     } catch (err) {
@@ -358,7 +371,10 @@ exports.markAttendance = async (req, res) => {
         }
 
         await post.save();
+        // Populate all relevant fields for the response
         await post.populate('author', 'username profileImageUrl');
+        await post.populate('interestedUsers', 'username profileImageUrl');
+        await post.populate('attendedUsers', 'username profileImageUrl');
 
         res.status(200).json({
             msg: hasAttended ? 'Attendance removed' : 'Attendance marked successfully',
@@ -386,7 +402,10 @@ exports.getAttendedPosts = async (req, res) => {
             eventEndDateTime: { $lt: new Date() } // Ensure the event has actually ended
         })
             .sort({ eventDateTime: -1 })
-            .populate('author', 'username profileImageUrl');
+            .populate('author', 'username profileImageUrl')
+            // If you want to see other attended users for these posts in the list:
+            .populate('attendedUsers', 'username profileImageUrl'); // Add this line
+            // .populate('interestedUsers', 'username profileImageUrl'); // Also an option
 
         res.status(200).json(posts.map(p => p.toObject({ getters: true })));
     } catch (err) {
