@@ -11,48 +11,48 @@ const path = require('path');
 // Private
 // ------------------------
 exports.createPost = async (req, res) => {
-  const { title, description, isEvent, eventDateTime, location } = req.body;
+    const { title, description, isEvent, eventDateTime, location } = req.body;
 
-  if (!title || !description) {
-    return res.status(400).json({ msg: 'Ti  tle and description are required.' });
-  }
-
-  try {
-    let imageUrls = [];
-
-    // Check if files exist and are an array
-    if (req.files && Array.isArray(req.files)) {
-      const imageUploadPromises = req.files.map(async (file) => {
-        const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-        const result = await cloudinary.uploader.upload(base64, {
-          folder: 'event_social_posts',
-        });
-        return result.secure_url;
-      });
-
-      imageUrls = await Promise.all(imageUploadPromises);
+    if (!title || !description) {
+        return res.status(400).json({ msg: 'Ti  tle and description are required.' });
     }
 
-    const newPost = new Post({
-      author: req.user.id,
-      title,
-      description,
-      mediaUrls: imageUrls,
-      isEvent: isEvent === 'true' || isEvent === true,
-      eventDateTime: isEvent ? eventDateTime : null,
-      location: isEvent ? location : null,
-    });
+    try {
+        let imageUrls = [];
 
-    const post = await newPost.save();
-    await post.populate('author', 'username profileImageUrl');
+        // Check if files exist and are an array
+        if (req.files && Array.isArray(req.files)) {
+            const imageUploadPromises = req.files.map(async (file) => {
+                const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+                const result = await cloudinary.uploader.upload(base64, {
+                    folder: 'event_social_posts',
+                });
+                return result.secure_url;
+            });
 
-    // Fix: Wrap the post object in a 'post' key
-    res.status(201).json({ post: post.toObject({ getters: true }) });
+            imageUrls = await Promise.all(imageUploadPromises);
+        }
 
-  } catch (err) {
-    console.error('❌ Error creating post:', err);
-    res.status(500).json({ msg: 'Server Error' });
-  }
+        const newPost = new Post({
+            author: req.user.id,
+            title,
+            description,
+            mediaUrls: imageUrls,
+            isEvent: isEvent === 'true' || isEvent === true,
+            eventDateTime: isEvent ? eventDateTime : null,
+            location: isEvent ? location : null,
+        });
+
+        const post = await newPost.save();
+        await post.populate('author', 'username profileImageUrl');
+
+        // Fix: Wrap the post object in a 'post' key
+        res.status(201).json({ post: post.toObject({ getters: true }) });
+
+    } catch (err) {
+        console.error('❌ Error creating post:', err);
+        res.status(500).json({ msg: 'Server Error' });
+    }
 };
 
 
@@ -193,6 +193,10 @@ exports.togglePostInterest = async (req, res) => {
             return res.status(404).json({ msg: 'Post not found' });
         }
 
+        if (post.eventDateTime && new Date() >= post.eventDateTime) {
+            return res.status(400).json({ msg: 'Cannot mark interest after event starts.' });
+        }
+
         const userId = req.user.id;
         const isInterested = post.interestedUsers.includes(userId);
 
@@ -203,6 +207,8 @@ exports.togglePostInterest = async (req, res) => {
             post.interestedUsers.push(userId);
             post.interestedCount += 1;
         }
+        
+
 
         await post.save();
         await post.populate('author', 'username profileImageUrl');
@@ -234,4 +240,34 @@ exports.getInterestedPosts = async (req, res) => {
         console.error('❌ Error fetching interested posts:', err.message);
         res.status(500).json({ msg: 'Server Error' });
     }
+};
+
+exports.markAttendance = async (req, res) => {
+  try {
+    const post = await Post.findById(req.params.postId);
+    const userId = req.user.id;
+
+    if (!post) return res.status(404).json({ msg: 'Post not found' });
+
+    const now = new Date();
+    if (!post.isEvent || now < post.eventDateTime) {
+      return res.status(400).json({ msg: 'Cannot mark attendance before event starts' });
+    }
+
+    if (!post.interestedUsers.includes(userId)) {
+      return res.status(403).json({ msg: 'You must be interested before the event to mark attendance.' });
+    }
+
+    if (post.attendedUsers.includes(userId)) {
+      return res.status(400).json({ msg: 'Already marked as attended' });
+    }
+
+    post.attendedUsers.push(userId);
+    await post.save();
+
+    res.status(200).json({ msg: 'Attendance marked successfully', attended: true });
+  } catch (err) {
+    console.error('❌ Error marking attendance:', err.message);
+    res.status(500).json({ msg: 'Server Error' });
+  }
 };
