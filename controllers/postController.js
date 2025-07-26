@@ -10,59 +10,82 @@ const path = require('path'); // Not used in provided code, can be removed if no
 // Private
 // ------------------------
 exports.createPost = async (req, res) => {
-    // Added eventEndDateTime to destructuring
-    const { title, description, isEvent, eventDateTime, eventEndDateTime, location } = req.body;
+  try {
+    const {
+      title,
+      description,
+      isEvent,
+      eventDateTime,
+      eventEndDateTime,
+      location,
+    } = req.body;
 
+    // Basic validation
     if (!title || !description) {
-        return res.status(400).json({ msg: 'Title and description are required.' });
+      return res.status(400).json({ msg: 'Title and description are required.' });
     }
 
-    // Validation for events: if isEvent is true, eventDateTime and eventEndDateTime are required
-    if (isEvent === 'true' || isEvent === true) {
-        if (!eventDateTime || !eventEndDateTime) {
-            return res.status(400).json({ msg: 'Event date and time (start and end) are required for events.' });
-        }
-        if (new Date(eventDateTime) >= new Date(eventEndDateTime)) {
-            return res.status(400).json({ msg: 'Event end time must be after start time.' });
-        }
-    }
+    // Handle boolean correctly (when isEvent is string from form-data)
+    const isEventBool = isEvent === true || isEvent === 'true';
 
-    try {
-        let imageUrls = [];
-
-        if (req.files && Array.isArray(req.files) && req.files.length > 0) {
-            const imageUploadPromises = req.files.map(async (file) => {
-                const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
-                const result = await cloudinary.uploader.upload(base64, {
-                    folder: 'event_social_posts',
-                });
-                return result.secure_url;
-            });
-
-            imageUrls = await Promise.all(imageUploadPromises);
-        }
-
-        const newPost = new Post({
-            author: req.user.id,
-            title,
-            description,
-            mediaUrls: imageUrls,
-            isEvent: isEvent === 'true' || isEvent === true,
-            eventDateTime: (isEvent === 'true' || isEvent === true) ? eventDateTime : null,
-            eventEndDateTime: (isEvent === 'true' || isEvent === true) ? eventEndDateTime : null, // Set eventEndDateTime
-            location: (isEvent === 'true' || isEvent === true) ? location : null,
+    // Event-specific validation
+    if (isEventBool) {
+      if (!eventDateTime || !eventEndDateTime) {
+        return res.status(400).json({
+          msg: 'Event date and time (start and end) are required for events.',
         });
+      }
 
-        const post = await newPost.save();
-        await post.populate('author', 'username profileImageUrl');
+      const startDate = new Date(eventDateTime);
+      const endDate = new Date(eventEndDateTime);
 
-        res.status(201).json({ post: post.toObject({ getters: true }) });
+      if (isNaN(startDate) || isNaN(endDate)) {
+        return res.status(400).json({ msg: 'Invalid event date/time format.' });
+      }
 
-    } catch (err) {
-        console.error('❌ Error creating post:', err);
-        res.status(500).json({ msg: 'Server Error' });
+      if (startDate >= endDate) {
+        return res.status(400).json({ msg: 'Event end time must be after start time.' });
+      }
     }
+
+    // Handle media upload
+    let imageUrls = [];
+
+    if (req.files && Array.isArray(req.files) && req.files.length > 0) {
+      const uploadPromises = req.files.map(async (file) => {
+        const base64 = `data:${file.mimetype};base64,${file.buffer.toString('base64')}`;
+        const result = await cloudinary.uploader.upload(base64, {
+          folder: 'event_social_posts',
+        });
+        return result.secure_url;
+      });
+
+      imageUrls = await Promise.all(uploadPromises);
+    }
+
+    // Create post
+    const newPost = new Post({
+      author: req.user.id,
+      title,
+      description,
+      mediaUrls: imageUrls,
+      isEvent: isEventBool,
+      eventDateTime: isEventBool ? new Date(eventDateTime) : null,
+      eventEndDateTime: isEventBool ? new Date(eventEndDateTime) : null,
+      location: isEventBool ? location : null,
+    });
+
+    const post = await newPost.save();
+    await post.populate('author', 'username profileImageUrl');
+
+    res.status(201).json({ post: post.toObject({ getters: true }) });
+
+  } catch (err) {
+    console.error('❌ Error creating post:', err);
+    res.status(500).json({ msg: 'Server Error' });
+  }
 };
+
 
 
 // ------------------------
