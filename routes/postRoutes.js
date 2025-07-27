@@ -51,6 +51,6 @@ router.post('/:postId/attend', protect, postController.markAttendance);
 // IMPORTANT: Changed route to '/my/attended' to avoid conflict with '/:postId'
 router.get('/my/attended', protect, postController.getAttendedPosts);
 
-router.put('/posts/:postId/attendance', protect, postController.togglePostAttendance);
+router.put('/:postId/attendance', protect, postController.togglePostAttendance);
 
 module.exports = router;
