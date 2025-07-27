@@ -265,12 +265,50 @@ exports.markAttendance = async (req, res) => {
     post.attendedUsers.push(userId);
     await post.save();
 
-    res.status(200).json({ msg: 'Attendance marked successfully', attended: true });
+    // ✅ Fetch the updated post to send back with full fields
+    const updatedPost = await Post.findById(post._id).populate('author');
+
+    res.status(200).json({
+      msg: 'Attendance marked successfully',
+      attended: true,
+      post: updatedPost, // ✅ send full post back
+    });
   } catch (err) {
     console.error('❌ Error marking attendance:', err.message);
     res.status(500).json({ msg: 'Server Error' });
   }
 };
+
+exports.togglePostAttendance = async (req, res) => {
+  try {
+    const userId = req.user.id; // assuming auth middleware sets req.user
+    const postId = req.params.postId;
+
+    const post = await Post.findById(postId);
+    if (!post) return res.status(404).json({ error: 'Post not found' });
+
+    const hasAttended = post.attendedUsers.includes(userId);
+
+    if (hasAttended) {
+      // Remove user from attendedUsers
+      post.attendedUsers = post.attendedUsers.filter(uid => uid.toString() !== userId);
+    } else {
+      // Add user to attendedUsers
+      post.attendedUsers.push(userId);
+      // Optional: Remove from interestedUsers if present
+      post.interestedUsers = post.interestedUsers.filter(uid => uid.toString() !== userId);
+    }
+
+    await post.save();
+    const populatedPost = await post.populate('author', 'name email'); // if needed
+
+    res.status(200).json({ post: populatedPost });
+  } catch (err) {
+    console.error('Toggle Attendance Error:', err);
+    res.status(500).json({ error: 'Server error while toggling attendance' });
+  }
+};
+
 
 // ------------------------
 // GET ATTENDED POSTS
