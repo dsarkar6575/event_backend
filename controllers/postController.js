@@ -280,33 +280,40 @@ exports.markAttendance = async (req, res) => {
 };
 
 exports.togglePostAttendance = async (req, res) => {
-  try {
-    const userId = req.user.id; // assuming auth middleware sets req.user
-    const postId = req.params.postId;
+    const { postId } = req.params;
+    const userId = req.user.id; // Assuming protect middleware adds user to req
 
-    const post = await Post.findById(postId);
-    if (!post) return res.status(404).json({ error: 'Post not found' });
+    try {
+        let post = await Post.findById(postId);
 
-    const hasAttended = post.attendedUsers.includes(userId);
+        if (!post) {
+            return res.status(404).json({ message: 'Post not found' });
+        }
 
-    if (hasAttended) {
-      // Remove user from attendedUsers
-      post.attendedUsers = post.attendedUsers.filter(uid => uid.toString() !== userId);
-    } else {
-      // Add user to attendedUsers
-      post.attendedUsers.push(userId);
-      // Optional: Remove from interestedUsers if present
-      post.interestedUsers = post.interestedUsers.filter(uid => uid.toString() !== userId);
+        const isAttended = post.attendedUsers.includes(userId);
+
+        if (isAttended) {
+            post.attendedUsers = post.attendedUsers.filter(id => id.toString() !== userId.toString());
+        } else {
+            post.attendedUsers.push(userId);
+        }
+
+        await post.save();
+
+        // Re-fetch the post with populated author to ensure consistent data for the client
+        const updatedPost = await Post.findById(postId).populate('author', 'username profileImageUrl');
+
+        // --- CRITICAL BACKEND DEBUGGING ---
+        console.log('Backend sending response for Post ID:', updatedPost._id);
+        console.log('Backend response mediaUrls:', updatedPost.mediaUrls); // <<< CHECK THIS LOG IN YOUR NODE.JS CONSOLE
+        // --- END BACKEND DEBUGGING ---
+
+        res.status(200).json({ post: updatedPost });
+
+    } catch (error) {
+        console.error('Error toggling post attendance:', error);
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
-
-    await post.save();
-    const populatedPost = await post.populate('author', 'name email'); // if needed
-
-    res.status(200).json({ post: populatedPost });
-  } catch (err) {
-    console.error('Toggle Attendance Error:', err);
-    res.status(500).json({ error: 'Server error while toggling attendance' });
-  }
 };
 
 
