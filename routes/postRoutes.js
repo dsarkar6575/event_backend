@@ -45,6 +45,11 @@ router.get('/my/interested', protect, postController.getInterestedPosts); // Spe
 // @access  Private
 router.post('/:postId/attend', protect, postController.markAttendance);
 
+// @route   GET api/posts/my/attended
+// @desc    Get posts the current user has attended
+// @access  Private
+// IMPORTANT: Changed route to '/my/attended' to avoid conflict with '/:postId'
+router.get('/my/attended', protect, postController.getAttendedPosts);
 
 
 module.exports = router;

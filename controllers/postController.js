@@ -271,3 +271,27 @@ exports.markAttendance = async (req, res) => {
     res.status(500).json({ msg: 'Server Error' });
   }
 };
+
+// ------------------------
+// GET ATTENDED POSTS
+// GET /api/posts/attended
+// Private
+// ------------------------
+exports.getAttendedPosts = async (req, res) => {
+    try {
+        const userId = req.user.id;
+
+        const attendedPosts = await Post.find({
+            isEvent: true, // Only fetch events
+            attendedUsers: userId, // Where the user is listed as attended
+            eventDateTime: { $lt: new Date() } // And the event has passed
+        })
+            .populate('author', 'username profileImageUrl') // Ensure 'profileImageUrl' matches frontend User model
+            .sort({ eventDateTime: -1 }); // Most recent attended event first
+
+        res.status(200).json(attendedPosts.map(p => p.toObject({ getters: true }))); // Ensure consistent output format
+    } catch (err) {
+        console.error('❌ Error fetching attended posts:', err.message);
+        res.status(500).json({ msg: 'Server Error' });
+    }
+};
