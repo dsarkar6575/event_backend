@@ -29,6 +29,11 @@ router.post('/:userId/follow', protect, userController.followUser);
 // @desc    Unfollow a user
 // @access  Private
 router.post('/:userId/unfollow', protect, userController.unfollowUser);
+// @route   GET api/users/me
+// @desc    Get logged-in user's profile from token
+// @access  Private
+router.get('/me', protect, userController.getCurrentUserProfile);
+
 
 
 module.exports = router;
