@@ -11,6 +11,37 @@ const generateToken = (userId) => {
   );
 };
 
+exports.googleAuthCallback = async (req, res) => {
+  if (!req.user) {
+    // This should ideally not happen if Passport's failureRedirect is set
+    return res.status(401).json({ msg: 'Google authentication failed.' });
+  }
+
+  try {
+    // req.user is populated by Passport's GoogleStrategy done(null, user)
+    const token = generateToken(req.user.id);
+    const user = req.user;
+
+    // You can redirect to your frontend with the token,
+    // or return it in a JSON response.
+    // For Flutter, redirecting with the token in a query parameter or fragment
+    // is common, or you can send it in a JSON response if the Flutter app
+    // directly calls this endpoint from a web view/browser.
+
+    // Option 1: Redirect with token in query parameter (common for web/mobile hybrid)
+    // Be careful with sensitive data in URL. Consider using a temporary code.
+    // For simplicity, we'll redirect with the token.
+    res.redirect(`${process.env.FRONTEND_URL}/auth-success?token=${token}&userId=${user.id}`);
+
+    // Option 2: Respond with JSON (if your frontend makes an AJAX call to this)
+    // res.json({ token, user });
+
+  } catch (error) {
+    console.error('Google auth callback error:', error);
+    res.status(500).json({ msg: 'Server error during Google authentication.' });
+  }
+};
+
 // @route   POST api/auth/register
 // @desc    Register user with email & password
 // @access  Public

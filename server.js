@@ -5,6 +5,8 @@ const mongoose = require('mongoose');
 const cors = require('cors');
 const http = require('http'); // For Socket.IO
 const { Server } = require("socket.io"); // For Socket.IO
+const passportConfig = require('./config/passport');
+
 
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
@@ -103,6 +105,9 @@ app.use('/api/chat', chatRoutes); // Consider how chat routes and Socket.IO inte
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/posts', commentRoutes);
 // Assuming you have a comments controller
+
+// Initialize Passport
+passportConfig(app); // Pass the app instance to the passport config
 
 
 // Basic error handling middleware (add more robust error handling)
