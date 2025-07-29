@@ -16,9 +16,14 @@ const UserSchema = new mongoose.Schema({
     },
     password: {
         type: String,
-        required: true,
+        required: function() { return !this.googleId; } ,
         minlength: 6
     },
+    googleId: { // New field for Google users
+    type: String,
+    unique: true,
+    sparse: true, // Allows multiple null values
+  },
     profileImageUrl: {
         type: String,
         default: null
