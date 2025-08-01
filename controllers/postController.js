@@ -1,6 +1,7 @@
 // controllers/postController.js
 const Post = require('../models/Post');
 const User = require('../models/User');
+const Chat = require('../models/Chat');
 const cloudinary = require('../utils/cloudinary');
 const fs = require('fs');
 const path = require('path');
@@ -339,4 +340,40 @@ exports.getAttendedPosts = async (req, res) => {
         console.error('❌ Error fetching attended posts:', err.message);
         res.status(500).json({ msg: 'Server Error' });
     }
+};
+
+
+exports.joinInterestGroup = async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const userId = req.user.id;
+
+    const post = await Post.findById(postId);
+    if (!post || !post.isEvent) {
+      return res.status(404).json({ msg: 'Event post not found or not an event.' });
+    }
+
+    let chat = await Chat.findOne({ postId });
+
+    if (!chat) {
+      chat = new Chat({
+        postId,
+        groupName: post.title,
+        participants: [userId],
+        isGroupChat: true,
+      });
+    } else {
+      if (!chat.participants.includes(userId)) {
+        chat.participants.push(userId);
+      }
+    }
+
+    await chat.save();
+    await chat.populate('participants', 'username profileImageUrl');
+
+    res.status(200).json({ msg: 'Joined interest group', chat });
+  } catch (err) {
+    console.error('❌ joinInterestGroup error:', err.message);
+    res.status(500).json({ msg: 'Server error' });
+  }
 };
