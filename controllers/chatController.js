@@ -1,211 +1,164 @@
 const Chat = require('../models/Chat');
+const Post = require('../models/Post'); // Now required
+const User = require('../models/User'); // Now required for updating interestedEvents
 const Message = require('../models/Message');
-const User = require('../models/User');
+const mongoose = require('mongoose');
 
-// @route   POST api/chat/start
-// @desc    Start or get an existing private chat
-// @access  Private
-exports.startPrivateChat = async (req, res) => {
-  const { recipientId } = req.body;
-  const currentUserId = req.user.id;
+// @desc    Join (or create) group chat for a post when user marks Interested
+// @route   POST /api/chat/join/:postId
+// @access  Private
+exports.joinPostGroupChat = async (req, res) => {
+  const { postId } = req.params;
+  const userId = req.user.id;
 
-  if (!recipientId) {
-    return res.status(400).json({ msg: 'Recipient ID is required.' });
-  }
-  if (recipientId === currentUserId) {
-    return res.status(400).json({ msg: 'Cannot start a chat with yourself.' });
+  if (!mongoose.Types.ObjectId.isValid(postId)) {
+    return res.status(400).json({ msg: 'Invalid post ID' });
   }
 
   try {
-    let chat = await Chat.findOne({
-      isGroupChat: false,
-      participants: { $all: [currentUserId, recipientId], $size: 2 }
-    })
-      .populate('participants', 'username profileImageUrl')
-      .populate('lastMessage');
+    const post = await Post.findById(postId);
+    if (!post || !post.isEvent) {
+      return res.status(404).json({ msg: 'Event post not found' });
+    }
+
+    let chat = await Chat.findOne({ postId });
+
+    // Find the user to update their interestedEvents
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ msg: 'User not found' });
+    }
 
     if (chat) {
-      return res.json(chat);
+      // Add user to chat if not already a participant
+      if (!chat.participants.includes(userId)) {
+        chat.participants.push(userId);
+        await chat.save();
+      }
+    } else {
+      // Create new group chat
+      chat = new Chat({
+        postId,
+        groupName: post.title,
+        participants: [userId]
+      });
+      await chat.save();
     }
 
-    const newChat = new Chat({
-      participants: [currentUserId, recipientId],
-      isGroupChat: false
-    });
+    // ⭐ IMPROVEMENT: Add the post to the user's interestedEvents array
+    // This is a crucial step to correctly link the user to the event.
+    if (!user.interestedEvents.includes(postId)) {
+      user.interestedEvents.push(postId);
+      await user.save();
+    }
 
-    chat = await newChat.save();
+    // Populate response
     await chat.populate('participants', 'username profileImageUrl');
+    res.status(200).json({ success: true, chat });
 
-    res.status(201).json(chat);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server Error');
+    console.error('❌ Error in joinPostGroupChat:', err.message);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
-// @route   POST api/chat/group
-// @desc    Create a new group chat
-// @access  Private
-exports.createGroupChat = async (req, res) => {
-  const { participantIds, groupName } = req.body;
-  const currentUserId = req.user.id;
-
-  if (!Array.isArray(participantIds) || participantIds.length < 2) {
-    return res.status(400).json({ msg: 'At least two participant IDs are required.' });
-  }
-
-  if (!groupName?.trim()) {
-    return res.status(400).json({ msg: 'Group name is required.' });
-  }
-
-  if (!participantIds.includes(currentUserId)) {
-    participantIds.push(currentUserId);
-  }
+// @desc    Get group chat by postId
+// @route   GET /api/chat/post/:postId
+// @access  Private
+exports.getChatByPostId = async (req, res) => {
+  const { postId } = req.params;
 
   try {
-    const users = await User.find({ _id: { $in: participantIds } }).lean();
-    if (users.length !== participantIds.length) {
-      return res.status(404).json({ msg: 'One or more participant IDs are invalid.' });
-    }
-
-    const newChat = new Chat({
-      participants: participantIds,
-      isGroupChat: true,
-      groupName
-    });
-
-    const chat = await newChat.save();
-    await chat.populate('participants', 'username profileImageUrl');
-
-    res.status(201).json(chat);
-  } catch (err) {
-    console.error(err);
-    res.status(500).send('Server Error');
-  }
-};
-
-// @route   GET api/chat
-// @desc    Get all chats for current user
-// @access  Private
-exports.getUserChats = async (req, res) => {
-  try {
-    const chats = await Chat.find({ participants: req.user.id })
+    // Note: It's good practice to ensure the user is a participant before returning the chat.
+    const chat = await Chat.findOne({ postId })
       .populate('participants', 'username profileImageUrl')
-      .populate('lastMessage')
-      .sort({ updatedAt: -1 });
+      .populate({
+        path: 'lastMessage',
+        populate: { path: 'sender', select: 'username profileImageUrl' }
+      });
 
-    res.json(chats);
+    if (!chat) {
+      return res.status(404).json({ msg: 'No group chat found for this post' });
+    }
+
+    res.status(200).json(chat);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server Error');
+    console.error('❌ Error in getChatByPostId:', err.message);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
-// @route   GET api/chat/:chatId/messages
-// @desc    Get messages in chat
-// @access  Private
-exports.getChatMessages = async (req, res) => {
-  const { chatId } = req.params;
-  const currentUserId = req.user.id;
+// @desc    Get messages in post's group chat
+// @route   GET /api/chat/post/:postId/messages
+// @access  Private
+exports.getGroupMessages = async (req, res) => {
+  const { postId } = req.params;
+  const userId = req.user.id;
 
   try {
-    const chat = await Chat.findById(chatId);
+    const chat = await Chat.findOne({ postId });
     if (!chat) {
-      return res.status(404).json({ msg: 'Chat room not found.' });
+      return res.status(404).json({ msg: 'No chat found for this event post' });
     }
 
-    if (!chat.participants.map(id => id.toString()).includes(currentUserId)) {
-      return res.status(403).json({ msg: 'Unauthorized access to chat.' });
+    // ⭐ IMPROVEMENT: Add a check to ensure the user is a participant
+    if (!chat.participants.includes(userId)) {
+      return res.status(403).json({ msg: 'You are not a participant in this chat' });
     }
 
-    const messages = await Message.find({ chat: chatId })
+    const messages = await Message.find({ chat: chat._id })
       .sort({ createdAt: 1 })
       .populate('sender', 'username profileImageUrl');
 
-    res.json(messages);
+    res.status(200).json(messages);
   } catch (err) {
-    console.error(err);
-    if (err.kind === 'ObjectId') {
-      return res.status(400).json({ msg: 'Invalid Chat ID' });
-    }
-    res.status(500).send('Server Error');
+    console.error('❌ Error fetching messages:', err.message);
+    res.status(500).json({ msg: 'Server error' });
   }
 };
 
-// @route   POST api/chat/:chatId/messages
-// @desc    Send a message to chat
-// @access  Private
-exports.sendMessage = async (req, res) => {
+// @desc    Send message to group chat
+// @route   POST /api/chat/post/:postId/messages
+// @access  Private
+exports.sendGroupMessage = async (req, res) => {
   const { content, type = 'text' } = req.body;
-  const { chatId } = req.params;
-  const currentUserId = req.user.id;
+  const { postId } = req.params;
+  const userId = req.user.id;
 
-  if (!content?.trim()) {
-    return res.status(400).json({ msg: 'Message content is required.' });
+  if (!content?.trim() && type === 'text') {
+    return res.status(400).json({ msg: 'Message content required' });
   }
 
   try {
-    const chat = await Chat.findById(chatId);
+    const chat = await Chat.findOne({ postId });
     if (!chat) {
-      return res.status(404).json({ msg: 'Chat room not found.' });
+      return res.status(404).json({ msg: 'Chat not found for this post' });
     }
 
-    if (!chat.participants.map(id => id.toString()).includes(currentUserId)) {
-      return res.status(403).json({ msg: 'Unauthorized to send message.' });
+    if (!chat.participants.includes(userId)) {
+      return res.status(403).json({ msg: 'You are not a participant in this chat' });
     }
 
     const newMessage = new Message({
-      chat: chatId,
-      sender: currentUserId,
+      chat: chat._id,
+      sender: userId,
       content,
       type,
-      readBy: [currentUserId]
+      readBy: [userId]
     });
 
     const savedMessage = await newMessage.save();
+
+    // Update chat with last message
     chat.lastMessage = savedMessage._id;
-    chat.updatedAt = Date.now();
     await chat.save();
 
     await savedMessage.populate('sender', 'username profileImageUrl');
 
-    // socket.io emit can happen here
+    // Emit via Socket.IO if needed here
     res.status(201).json(savedMessage);
   } catch (err) {
-    console.error(err);
-    res.status(500).send('Server Error');
-  }
-};
-
-// @route   PUT api/chat/messages/:messageId/read
-// @desc    Mark message as read
-// @access  Private
-exports.markMessageAsRead = async (req, res) => {
-  try {
-    const { messageId } = req.params;
-    const currentUserId = req.user.id;
-
-    const message = await Message.findById(messageId);
-    if (!message) {
-      return res.status(404).json({ msg: 'Message not found.' });
-    }
-
-    const chat = await Chat.findById(message.chat);
-    if (!chat || !chat.participants.map(id => id.toString()).includes(currentUserId)) {
-      return res.status(403).json({ msg: 'Unauthorized to mark read.' });
-    }
-
-    if (!message.readBy.includes(currentUserId)) {
-      message.readBy.push(currentUserId);
-      await message.save();
-    }
-
-    res.json({ msg: 'Message marked as read.' });
-  } catch (err) {
-    console.error(err);
-    if (err.kind === 'ObjectId') {
-      return res.status(400).json({ msg: 'Invalid Message ID' });
-    }
-    res.status(500).send('Server Error');
+    console.error('❌ Error sending group message:', err.message);
+    res.status(500).json({ msg: 'Server error' });
   }
 };

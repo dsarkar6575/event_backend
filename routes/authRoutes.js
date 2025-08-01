@@ -3,7 +3,6 @@ const express = require('express');
 const router = express.Router();
 const authController = require('../controllers/authController');
 const { protect } = require('../middleware/authMiddleware'); // For protected routes
-const passport = require('passport'); // Import passport
 
 // @route   POST api/auth/register
 // @desc    Register a new user (via Firebase ID token)
@@ -15,24 +14,7 @@ router.post('/register', authController.registerUser);
 // @access  Public
 router.post('/login', authController.loginUser);
 
-// --- Google OAuth2 Routes ---
 
-// @route   GET /api/auth/google
-// @desc    Initiate Google OAuth2 authentication
-// @access  Public
-router.get(
-  '/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
-);
-
-// @route   GET /api/auth/google/callback
-// @desc    Google OAuth2 callback route
-// @access  Public
-router.get(
-  '/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login' }), // Redirect to login on failure
-  authController.googleAuthCallback // Your controller to handle successful authentication
-);
 
 // @route   GET api/auth
 // @desc    Get authenticated user details (using your JWT)

@@ -1,7 +1,7 @@
 // routes/postRoutes.js
 const express = require('express');
 const router = express.Router();
-const postController = require('../controllers/postController');
+const  postController = require('../controllers/postController');
 const { protect } = require('../middleware/authMiddleware');
 const upload = require('../middleware/multer.js'); 
 
@@ -52,5 +52,7 @@ router.post('/:postId/attend', protect, postController.markAttendance);
 router.get('/my/attended', protect, postController.getAttendedPosts);
 
 router.put('/:postId/attendance', protect, postController.togglePostAttendance);
+
+router.post('/:postId/join-interest-group', protect, postController.joinInterestGroup);
 
 module.exports = router;
