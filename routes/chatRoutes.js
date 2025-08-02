@@ -3,6 +3,8 @@ const router = express.Router();
 const chatController = require('../controllers/chatController');
 const { protect } = require('../middleware/authMiddleware');
 
+router.get('/', protect, chatController.getUserChats);
+
 // Create or join group chat
 router.post('/join/:postId', protect, chatController.joinPostGroupChat);
 

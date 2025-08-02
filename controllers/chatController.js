@@ -163,3 +163,25 @@ exports.sendGroupMessage = async (req, res) => {
     res.status(500).json({ msg: 'Server error' });
   }
 };
+
+// In controllers/chatController.js
+
+// @desc    Get all chats for the logged-in user
+// @route   GET /api/chat
+// @access  Private
+exports.getUserChats = async (req, res) => {
+  try {
+    const chats = await Chat.find({ participants: req.user.id })
+      .populate('participants', 'username profileImageUrl')
+      .populate({
+        path: 'lastMessage',
+        populate: { path: 'sender', select: 'username profileImageUrl' },
+      })
+      .sort({ updatedAt: -1 }); // Sort by most recent activity
+
+    res.status(200).json(chats);
+  } catch (err) {
+    console.error('❌ Error fetching user chats:', err.message);
+    res.status(500).json({ msg: 'Server error' });
+  }
+};
