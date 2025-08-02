@@ -344,34 +344,59 @@ exports.getAttendedPosts = async (req, res) => {
 
 
 exports.joinInterestGroup = async (req, res) => {
-  try {
-    const { postId } = req.params;
-    const userId = req.user.id;
+  const { postId } = req.params;
+  const userId = req.user.id;
 
-    const post = await Post.findById(postId);
-    if (!post || !post.isEvent) {
-      return res.status(404).json({ msg: 'Event post not found or not an event.' });
+  try {
+    // 1. Validate the postId first for a cleaner error message.
+    if (!mongoose.Types.ObjectId.isValid(postId)) {
+        return res.status(400).json({ msg: 'Invalid post ID format.' });
     }
 
-    let chat = await Chat.findOne({ postId });
+    // 2. Fetch the post and the chat simultaneously for efficiency.
+    const [post, chat] = await Promise.all([
+      Post.findById(postId),
+      Chat.findOne({ postId })
+    ]);
+    
+    // 3. Handle non-existent or non-event posts.
+    if (!post || !post.isEvent) {
+      return res.status(404).json({ msg: 'Event post not found or is not an event.' });
+    }
 
-    if (!chat) {
-      chat = new Chat({
+    let updatedChat;
+
+    if (chat) {
+      // 4. Check if the user is already a participant before pushing.
+      // Use toString() to compare ObjectId with a string ID correctly.
+      if (!chat.participants.map(p => p.toString()).includes(userId.toString())) {
+        chat.participants.push(userId);
+        updatedChat = await chat.save();
+      } else {
+        // User is already in the group, no need to save again.
+        updatedChat = chat;
+      }
+    } else {
+      // 5. If no chat exists, create a new one.
+      updatedChat = await Chat.create({
         postId,
         groupName: post.title,
         participants: [userId],
         isGroupChat: true,
       });
-    } else {
-      if (!chat.participants.includes(userId)) {
-        chat.participants.push(userId);
-      }
     }
 
-    await chat.save();
-    await chat.populate('participants', 'username profileImageUrl');
+    // 6. Ensure the user is also added to the post's interestedUsers list.
+    // This synchronizes the chat group with the post's interest count.
+    if (!post.interestedUsers.map(u => u.toString()).includes(userId.toString())) {
+        post.interestedUsers.push(userId);
+        await post.save();
+    }
 
-    res.status(200).json({ msg: 'Joined interest group', chat });
+    // 7. Populate the participants for the response.
+    await updatedChat.populate('participants', 'username profileImageUrl');
+
+    res.status(200).json({ msg: 'Joined interest group', chat: updatedChat });
   } catch (err) {
     console.error('❌ joinInterestGroup error:', err.message);
     res.status(500).json({ msg: 'Server error' });

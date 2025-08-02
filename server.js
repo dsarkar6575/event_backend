@@ -70,22 +70,49 @@ io.on('connection', async (socket) => {
     console.error('❌ Failed to join chat rooms:', err.message);
   }
 
-  // Listen to real-time message sending
-  socket.on('sendMessage', async (data) => {
-    try {
-      console.log('📩 Incoming socket message:', data);
+ // In server.js
 
-      io.to(data.chatRoomId).emit('receiveMessage', {
-        ...data,
-        sender: socket.user.id,
-        timestamp: new Date().toISOString()
-      });
+// ... inside io.on('connection', ...)
+
+socket.on('sendMessage', async (data) => {
+    try {
+        const { chatRoomId, content, type = 'text', mediaUrl = null } = data;
+        const senderId = socket.user.id; // Get sender from authenticated socket
+
+        // 1. Find the chat and verify the sender is a participant
+        const chat = await Chat.findById(chatRoomId);
+        if (!chat || !chat.participants.map(p => p.toString()).includes(senderId)) {
+            // Emit an error back to the sender only
+            return socket.emit('sendMessageError', { message: 'Chat not found or you are not a participant.' });
+        }
+
+        // 2. Create and save the new message
+        const newMessage = new Message({
+            chat: chatRoomId,
+            sender: senderId,
+            content: content,
+            type: type,
+            mediaUrl: mediaUrl,
+            readBy: [senderId] // Sender has implicitly read the message
+        });
+        
+        let savedMessage = await newMessage.save();
+
+        // 3. Update the chat's lastMessage
+        chat.lastMessage = savedMessage._id;
+        await chat.save();
+        
+        // 4. Populate sender details for the response
+        savedMessage = await savedMessage.populate('sender', 'username profileImageUrl');
+
+        // 5. Broadcast the *saved* message to everyone in the room
+        io.to(chatRoomId).emit('receiveMessage', savedMessage);
 
     } catch (error) {
-      console.error('❌ Socket message error:', error);
-      socket.emit('sendMessageError', { message: 'Failed to send message.' });
+        console.error('❌ Socket message error:', error);
+        socket.emit('sendMessageError', { message: 'Failed to send message.' });
     }
-  });
+});
 
   socket.on('disconnect', () => {
     console.log(`⚠️ Socket disconnected: ${socket.user.id}`);
