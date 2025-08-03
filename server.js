@@ -119,7 +119,7 @@ app.use('/api/posts', postRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
 // ✅ FIX: Changed route to be more specific and avoid conflicts with postRoutes
-app.use('/api/posts/:postId/comments', commentRoutes);
+app.use('/api/posts', commentRoutes);
 
 // Basic error handler
 app.use((err, req, res, next) => {
