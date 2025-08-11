@@ -8,7 +8,7 @@ const upload = require('../middleware/multer.js');
 // @route   GET api/users/:userId
 // @desc    Get user profile by ID
 // @access  Public
-router.get('/:userId', userController.getUserProfile);
+router.get('/:userId',protect, userController.getUserProfile);
 
 // @route   PUT api/users/:userId
 // @desc    Update user profile
@@ -18,7 +18,7 @@ router.put('/:userId', protect, upload.single('profileImageUrl'), userController
 // @route   GET api/users/:userId/posts
 // @desc    Get all posts by a specific user
 // @access  Public
-router.get('/:userId/posts', userController.getUserPosts);
+router.get('/:userId/posts', protect, userController.getUserPosts);
 
 // @route   POST api/users/:userId/follow
 // @desc    Follow a user

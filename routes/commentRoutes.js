@@ -6,7 +6,7 @@ const { protect } = require('../middleware/authMiddleware');
 
 // Route: POST /api/posts/:postId/comments
 router.post('/:postId/comments', protect, commentController.createComment);
-router.get('/:postId/comments', commentController.getCommentsByPost);
+router.get('/:postId/comments', protect, commentController.getCommentsByPost);
 
 
 module.exports = router;
