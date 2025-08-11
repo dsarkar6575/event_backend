@@ -3,8 +3,6 @@ const mongoose = require('mongoose');
 const UserSchema = new mongoose.Schema({
     username: {
         type: String,
-        required: true,
-        unique: true,
         trim: true
     },
     
@@ -18,7 +16,6 @@ const UserSchema = new mongoose.Schema({
 
     password: {
         type: String,
-        required: function() { return !this.googleId; } ,
         minlength: 6
     },
 
@@ -47,8 +44,18 @@ const UserSchema = new mongoose.Schema({
     following: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
-    }]
-}, {
+    }],
+
+    otp: String,
+
+    otpExpires: Date,
+    
+    isVerified: {
+        type: Boolean,
+        default: false
+    }
+}, 
+{
     timestamps: true 
 });
 

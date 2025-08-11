@@ -18,7 +18,7 @@ router.get('/', protect, postController.getAllPosts);
 // @route   GET api/posts/:postId
 // @desc    Get a single post by ID
 // @access  Public
-router.get('/:postId', postController.getPostById);
+router.get('/:postId', protect, postController.getPostById);
 
 // @route   PUT api/posts/:postId
 // @desc    Update a post

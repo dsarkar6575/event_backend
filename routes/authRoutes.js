@@ -9,12 +9,15 @@ const { protect } = require('../middleware/authMiddleware'); // For protected ro
 // @access  Public
 router.post('/register', authController.registerUser);
 
+// @route   POST api/auth/verify
+// @desc    Verify OTP and complete user registration
+// @access  Public
+router.post('/verify', authController.verifyOtpAndRegister);
+
 // @route   POST api/auth/login
 // @desc    Login user (via Firebase ID token) and get your backend JWT
 // @access  Public
 router.post('/login', authController.loginUser);
-
-
 
 // @route   GET api/auth
 // @desc    Get authenticated user details (using your JWT)
