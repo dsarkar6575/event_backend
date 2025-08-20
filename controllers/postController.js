@@ -1,5 +1,4 @@
 // controllers/postController.js
-const mongoose = require("mongoose");
 const Post = require('../models/Post');
 const User = require('../models/User');
 const Chat = require('../models/Chat');
@@ -401,39 +400,5 @@ exports.joinInterestGroup = async (req, res) => {
   } catch (err) {
     console.error('❌ joinInterestGroup error:', err.message);
     res.status(500).json({ msg: 'Server error' });
-  }
-};
-
-// @desc    Get personalized feed (all posts if no following, else followed users only)
-// @route   GET /api/posts/feed
-// @access  Private
-// ------------------------
-// GET PERSONALIZED FEED
-// GET /api/posts/feed
-// Private
-// ------------------------
-exports.getFeedPosts = async (req, res) => {
-  try {
-    const currentUser = await User.findById(req.user.id);
-
-    if (!currentUser) {
-      return res.status(404).json({ msg: "User not found" });
-    }
-
-    let query = {};
-
-    // ✅ If user follows others → only show their posts
-    if (currentUser.following && currentUser.following.length > 0) {
-      query = { author: { $in: currentUser.following } };
-    }
-
-    const posts = await Post.find(query)
-      .sort({ createdAt: -1 })
-      .populate("author", "username profileImageUrl");
-
-    res.status(200).json(posts.map((p) => p.toObject({ getters: true })));
-  } catch (err) {
-    console.error("❌ Error fetching feed posts:", err.message);
-    res.status(500).json({ msg: "Server Error" });
   }
 };
