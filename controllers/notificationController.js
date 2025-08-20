@@ -2,9 +2,6 @@
 const Notification = require('../models/Notification');
 const User = require('../models/User'); // May be useful for populating sender info
 
-// -------------------
-// CREATE NOTIFICATION (Helper Function)
-// -------------------
 exports.createNotification = async ({ recipientId, senderId, type, message, relatedEntityId }) => {
     try {
         const newNotification = new Notification({
